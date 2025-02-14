@@ -1,0 +1,6 @@
+openai
+pyTelegramBotAPI
+flask
+gunicorn
+sqlite3
+requests
