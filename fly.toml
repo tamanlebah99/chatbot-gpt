@@ -1,0 +1,14 @@
+app = "chatbot-gpt"
+
+[build]
+
+[env]
+PORT = "5003"
+
+[[services]]
+internal_port = 5003
+protocol = "tcp"
+
+[[services.ports]]
+handlers = ["http"]
+port = 80
