@@ -1,14 +1,13 @@
-app = "chatbot-gpt"
-
-[build]
-
-[env]
-PORT = "5003"
-
 [[services]]
-internal_port = 5003
-protocol = "tcp"
+  internal_port = 5003
+  protocol = "tcp"
 
 [[services.ports]]
-handlers = ["http"]
-port = 80
+  handlers = ["http"]
+  port = 80
+
+[[services.tcp_checks]]
+  grace_period = "10s"
+  interval = "30s"
+  restart_limit = 3
+  timeout = "5s"
