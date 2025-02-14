@@ -16,7 +16,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 openai.api_key = OPENAI_API_KEY
 
 def create_db():
-    """Ensure the coaching_sessions table exists with chat_summary."""
+    """Ensure the coaching_sessions table exists with category_selected as INTEGER."""
     conn = sqlite3.connect("coaching.db")
     cursor = conn.cursor()
     cursor.execute("""
@@ -24,7 +24,8 @@ def create_db():
             user_id TEXT PRIMARY KEY,
             goal_coaching TEXT,
             chat_history TEXT,
-            chat_summary TEXT
+            chat_summary TEXT,
+            category_selected INTEGER DEFAULT 0
         )
     """)
     conn.commit()
@@ -36,22 +37,36 @@ def insert_or_get_coaching_session(user_id):
     conn = sqlite3.connect("coaching.db")
     cursor = conn.cursor()
     cursor.execute("""
-        INSERT INTO coaching_sessions (user_id, goal_coaching, chat_history, chat_summary) 
-        VALUES (?, '', '', '') 
+        INSERT INTO coaching_sessions (user_id, goal_coaching, chat_history, chat_summary, category_selected) 
+        VALUES (?, '', '', '', 0) 
         ON CONFLICT(user_id) DO NOTHING
     """, (user_id,))
     conn.commit()
     
-    cursor.execute("SELECT goal_coaching, chat_history, chat_summary FROM coaching_sessions WHERE user_id = ?", (user_id,))
+    cursor.execute("""
+        SELECT goal_coaching, chat_history, chat_summary, category_selected 
+        FROM coaching_sessions WHERE user_id = ?
+    """, (user_id,))
     row = cursor.fetchone()
     conn.close()
     
-    return {"goal_coaching": row[0], "chat_history": row[1], "chat_summary": row[2]} if row else {"goal_coaching": "", "chat_history": "", "chat_summary": ""}
-
-def update_coaching_session(user_id, session, chat_last, coaching_output):
-    """Update chat history and summary in the database."""
+    return {
+        "goal_coaching": row[0],
+        "chat_history": row[1],
+        "chat_summary": row[2],
+        "category_selected": bool(row[3])  # Konversi ke boolean (0=False, 1=True)
+    } if row else {
+        "goal_coaching": "",
+        "chat_history": "",
+        "chat_summary": "",
+        "category_selected": False
+    }
+    
+def update_coaching_session(user_id, session, chat_last, coaching_output, category_selected=False):
+    """Update chat history, summary, and category selection in the database."""
     create_db()  # Ensure DB is initialized
-    # Load existing chat history from string to list
+
+    # Load existing chat history from JSON string to list
     existing_chat_history = json.loads(session['chat_history']) if session['chat_history'] else []
     
     # Append new user and assistant messages
@@ -62,17 +77,21 @@ def update_coaching_session(user_id, session, chat_last, coaching_output):
     new_chat_history = json.dumps(existing_chat_history)
     session['chat_history'] = new_chat_history
     
-    chat_summary = ""
+    chat_summary = session.get("chat_summary", "")
     updated_goal = ""
+
     conn = sqlite3.connect("coaching.db")
     cursor = conn.cursor()    
+
+    # Update database with new chat history and category selection flag
     cursor.execute("""
         UPDATE coaching_sessions
         SET chat_history = COALESCE(?, chat_history), 
             chat_summary = COALESCE(?, chat_summary), 
-            goal_coaching = COALESCE(?, goal_coaching)
+            goal_coaching = COALESCE(?, goal_coaching),
+            category_selected = ?
         WHERE user_id = ?
-    """, (new_chat_history, chat_summary, updated_goal, user_id))
+    """, (new_chat_history, chat_summary, updated_goal, int(category_selected), user_id))
     
     conn.commit()
     conn.close()
@@ -225,14 +244,10 @@ def webhook():
         reply = ""
         user_id = ""
         update = request.json
+        
         if "message" in update:
             user_id = update["message"]["chat"]["id"]
-            incoming_msg = update["message"]["text"]
-        
-        
-            #create_db()  # Ensure DB is initialized
-            #user_id = request.values.get("From", "")
-            #incoming_msg = request.values.get("Body", "").strip()
+            incoming_msg = update["message"]["text"].strip()
             session = insert_or_get_coaching_session(user_id)  # Ensure session exists
             
             categories = {
@@ -248,34 +263,36 @@ def webhook():
                 "10": "Tahu harus ngapain, tapi sulit melakukannya."
             }
             
-            if not session['chat_history']:  # Jika chat pertama, minta input pertama kali
-                reply = "Silakan pilih percakapan coaching berikut:\n"        
+            if incoming_msg.lower() == "/start":  # Tangani command start dengan sambutan
+                reply = "✨ Selamat datang di CoachBot 4AA! ✨\n\nSaya di sini untuk membantu Anda menemukan solusi sendiri melalui refleksi dan coaching.\n\nSilakan pilih salah satu topik coaching berikut:\n"
                 for key, value in categories.items():
                     reply += f"{key}. {value}\n"
-                reply += "\nKetik angka kategori yang kamu pilih."          
-                if incoming_msg in categories:            
+                reply += "\nKetik angka kategori yang kamu pilih untuk memulai."
+            
+            elif not session['category_selected']:  # Jika user belum memilih kategori
+                if incoming_msg in categories:  # Jika user memilih angka kategori          
                     first_msg = categories[incoming_msg]                    
                     prompt = generate_prompt(user_id, first_msg, session)
-                    #coaching_output = "test1"
                     coaching_output = send_to_openai(prompt)
-                    update_coaching_session(user_id, session, first_msg, coaching_output)                    
+                    update_coaching_session(user_id, session, first_msg, coaching_output, category_selected=True)
                     reply = coaching_output
-                else:
-                    first_msg = incoming_msg                    
+                else:  # Jika user mengetik bebas, langsung tanggapi tanpa menampilkan kategori lagi
+                    prompt = generate_prompt(user_id, incoming_msg, session)
+                    coaching_output = send_to_openai(prompt)
+                    update_coaching_session(user_id, session, incoming_msg, coaching_output)
+                    reply = coaching_output
             else:                
                 prompt = generate_prompt(user_id, incoming_msg, session)
-                #coaching_output = "test2"
                 coaching_output = send_to_openai(prompt)
                 update_coaching_session(user_id, session, incoming_msg, coaching_output)
-                
                 reply = coaching_output
             
         # Kirim balasan ke Telegram
         send_message(user_id, reply)
         return "OK", 200
-
+    
     except Exception as e:
-        print(f"🔥 Error terjadi: {e}")  # Log error di Kaggle
+        print(f"🔥 Error terjadi: {e}")  # Log error di server
         return "Internal Server Error", 500
 
 @app.route('/')
