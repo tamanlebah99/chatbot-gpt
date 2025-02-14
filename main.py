@@ -276,5 +276,10 @@ def webhook():
         print(f"🔥 Error terjadi: {e}")  # Log error di Kaggle
         return "Internal Server Error", 500
 
+@app.route('/')
+def home():
+    return "Chatbot is running!", 200
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5003, debug=False)
+    app.run(host="0.0.0.0", port=5003, debug=True)
+
