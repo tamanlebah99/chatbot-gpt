@@ -6,6 +6,7 @@ import sqlite3
 import openai
 import os
 import time
+import requests
 
 # Inisialisasi variabel global
 app = Flask(__name__)
