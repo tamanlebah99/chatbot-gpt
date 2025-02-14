@@ -260,7 +260,8 @@ def webhook():
                     coaching_output = send_to_openai(prompt)
                     update_coaching_session(user_id, session, first_msg, coaching_output)                    
                     reply = coaching_output
-                    
+                else:
+                    first_msg = incoming_msg                    
             else:                
                 prompt = generate_prompt(user_id, incoming_msg, session)
                 #coaching_output = "test2"
