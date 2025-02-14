@@ -1,7 +1,6 @@
 # Unit Test OpenAI (Run-04 Ngrok V)
 from flask import Flask, request, jsonify
 from threading import Thread
-from pyngrok import ngrok
 import json
 import sqlite3
 import openai
@@ -278,16 +277,4 @@ def webhook():
         return "Internal Server Error", 500
 
 if __name__ == "__main__":
-    port = 5003
-    if "KAGGLE_KERNEL_RUN_MODE" in os.environ:
-        public_url = ngrok.connect("5003", "http")
-        print(f"New Public URL: {public_url}")
-        
-        def run_flask():
-            app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
-        
-        Thread(target=run_flask).start()
-    else:
-        public_url = ngrok.connect("5003", "http")
-        print(f"New Public URL: {public_url}")
-        app.run(host="0.0.0.0", port=port, debug=False)
+    app.run(host="0.0.0.0", port=5003, debug=False)
