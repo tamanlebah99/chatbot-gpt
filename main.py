@@ -1,6 +1,5 @@
 # Unit Test OpenAI (Run-04 Ngrok V)
 from flask import Flask, request, jsonify
-#from twilio.twiml.messaging_response import MessagingResponse
 from threading import Thread
 from pyngrok import ngrok
 import json
@@ -12,8 +11,8 @@ import time
 # Inisialisasi variabel global
 app = Flask(__name__)
 session = {}
-TELEGRAM_BOT_TOKEN = "8088135016:AAElpaVo8zrTFyETb-2KK-XGmUoDbyYTrjA"
-OPENAI_API_KEY = "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"
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 openai.api_key = OPENAI_API_KEY
 
 def create_db():
