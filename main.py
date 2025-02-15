@@ -22,7 +22,7 @@ def get_db_connection():
         user= os.getenv("MYSQL_USER")",
         password= os.getenv("MYSQL_PASSWORD"),
         database= os.getenv("MYSQL_DB"),
-        port=os.getenv("MYSQL_PORT")
+        port=3306
     )
 
 def create_db():
