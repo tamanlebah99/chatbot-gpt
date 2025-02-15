@@ -19,7 +19,7 @@ def get_db_connection():
     """Membuat koneksi ke database MySQL."""
     return mysql.connector.connect(
         host= os.getenv("MYSQL_HOST"),
-        user= os.getenv("MYSQL_USER")",
+        user= os.getenv("MYSQL_USER"),
         password= os.getenv("MYSQL_PASSWORD"),
         database= os.getenv("MYSQL_DB"),
         port=3306
