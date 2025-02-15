@@ -1,8 +1,8 @@
-# Unit Test OpenAI (Run-04 Ngrok V)
+#from pyngrok import ngrok
 from flask import Flask, request, jsonify
 from threading import Thread
 import json
-import sqlite3
+import mysql.connector
 import openai
 import os
 import time
@@ -12,20 +12,30 @@ import requests
 app = Flask(__name__)
 session = {}
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_API_KEY =  os.getenv("OPENAI_API_KEY")
 openai.api_key = OPENAI_API_KEY
+
+def get_db_connection():
+    """Membuat koneksi ke database MySQL."""
+    return mysql.connector.connect(
+        host= os.getenv("MYSQL_HOST"),
+        user= os.getenv("MYSQL_USER")",
+        password= os.getenv("MYSQL_PASSWORD"),
+        database= os.getenv("MYSQL_DB"),
+        port=os.getenv("MYSQL_PORT")
+    )
 
 def create_db():
     """Ensure the coaching_sessions table exists with category_selected as INTEGER."""
-    conn = sqlite3.connect("coaching.db")
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS coaching_sessions (
-            user_id TEXT PRIMARY KEY,
+            user_id VARCHAR(255) PRIMARY KEY,
             goal_coaching TEXT,
             chat_history TEXT,
             chat_summary TEXT,
-            category_selected INTEGER DEFAULT 0
+            category_selected BOOLEAN DEFAULT 0
         )
     """)
     conn.commit()
@@ -33,19 +43,18 @@ def create_db():
 
 def insert_or_get_coaching_session(user_id):
     """Ensure coaching session exists, or create a new one if missing."""
-    create_db()  # Ensure DB is initialized
-    conn = sqlite3.connect("coaching.db")
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
         INSERT INTO coaching_sessions (user_id, goal_coaching, chat_history, chat_summary, category_selected) 
-        VALUES (?, '', '', '', 0) 
-        ON CONFLICT(user_id) DO NOTHING
+        VALUES (%s, '', '', '', 0) 
+        ON DUPLICATE KEY UPDATE user_id=user_id
     """, (user_id,))
     conn.commit()
     
     cursor.execute("""
         SELECT goal_coaching, chat_history, chat_summary, category_selected 
-        FROM coaching_sessions WHERE user_id = ?
+        FROM coaching_sessions WHERE user_id = %s
     """, (user_id,))
     row = cursor.fetchone()
     conn.close()
@@ -54,48 +63,38 @@ def insert_or_get_coaching_session(user_id):
         "goal_coaching": row[0],
         "chat_history": row[1],
         "chat_summary": row[2],
-        "category_selected": bool(row[3])  # Konversi ke boolean (0=False, 1=True)
+        "category_selected": bool(row[3])
     } if row else {
         "goal_coaching": "",
         "chat_history": "",
         "chat_summary": "",
         "category_selected": False
     }
-    
+
 def update_coaching_session(user_id, session, chat_last, coaching_output, category_selected=False):
     """Update chat history, summary, and category selection in the database."""
-    create_db()  # Ensure DB is initialized
-
-    # Load existing chat history from JSON string to list
     existing_chat_history = json.loads(session['chat_history']) if session['chat_history'] else []
-    
-    # Append new user and assistant messages
     existing_chat_history.append({"role": "user", "content": chat_last})
     existing_chat_history.append({"role": "assistant", "content": coaching_output})
-    
-    # Convert back to JSON string for database storage
     new_chat_history = json.dumps(existing_chat_history)
     session['chat_history'] = new_chat_history
-    
     chat_summary = session.get("chat_summary", "")
     updated_goal = ""
-
-    conn = sqlite3.connect("coaching.db")
-    cursor = conn.cursor()    
-
-    # Update database with new chat history and category selection flag
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
     cursor.execute("""
         UPDATE coaching_sessions
-        SET chat_history = COALESCE(?, chat_history), 
-            chat_summary = COALESCE(?, chat_summary), 
-            goal_coaching = COALESCE(?, goal_coaching),
-            category_selected = ?
-        WHERE user_id = ?
+        SET chat_history = COALESCE(%s, chat_history), 
+            chat_summary = COALESCE(%s, chat_summary), 
+            goal_coaching = COALESCE(%s, goal_coaching),
+            category_selected = %s
+        WHERE user_id = %s
     """, (new_chat_history, chat_summary, updated_goal, int(category_selected), user_id))
     
     conn.commit()
     conn.close()
-    
+
 def generate_prompt(user_id, chat_last, session):
     """Generate prompt for CustomGPT based on coaching data."""
     #session = get_session(user_id)
@@ -236,7 +235,7 @@ def send_message(chat_id, text):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {"chat_id": chat_id, "text": text}
     requests.post(url, json=payload)
-    
+
 @app.route(f"/webhook/{TELEGRAM_BOT_TOKEN}", methods=["POST"])
 def webhook():
     """Handle incoming WhatsApp messages via Twilio."""
@@ -262,7 +261,7 @@ def webhook():
                 "9": "Stuck di zona nyaman, tapi ragu mau keluar.",
                 "10": "Tahu harus ngapain, tapi sulit melakukannya."
             }
-            
+            coaching_output = "✨ Selamat datang di CoachBot 4AA! ✨\n\nSaya di sini untuk membantu Anda menemukan solusi sendiri melalui refleksi dan coaching.\n\nSilakan pilih salah satu topik coaching berikut:\n"
             if incoming_msg.lower() == "/start":  # Tangani command start dengan sambutan
                 reply = "✨ Selamat datang di CoachBot 4AA! ✨\n\nSaya di sini untuk membantu Anda menemukan solusi sendiri melalui refleksi dan coaching.\n\nSilakan pilih salah satu topik coaching berikut:\n"
                 for key, value in categories.items():
@@ -272,7 +271,7 @@ def webhook():
             elif not session['category_selected']:  # Jika user belum memilih kategori
                 if incoming_msg in categories:  # Jika user memilih angka kategori          
                     first_msg = categories[incoming_msg]                    
-                    prompt = generate_prompt(user_id, first_msg, session)
+                    prompt = generate_prompt(user_id, first_msg, session)                    
                     coaching_output = send_to_openai(prompt)
                     update_coaching_session(user_id, session, first_msg, coaching_output, category_selected=True)
                     reply = coaching_output
@@ -298,7 +297,6 @@ def webhook():
 @app.route('/')
 def home():
     return "Chatbot is running!", 200
-
+        
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5003, debug=True)
-
