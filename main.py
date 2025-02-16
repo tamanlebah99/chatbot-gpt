@@ -1,3 +1,4 @@
+# FLYIO
 from flask import Flask, request, jsonify
 from threading import Thread
 import json
@@ -14,6 +15,22 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 OPENAI_API_KEY =  os.getenv("OPENAI_API_KEY")
 openai.api_key = OPENAI_API_KEY
 
+def get_db_connection():
+    """Membuat koneksi ke database MySQL."""
+    return mysql.connector.connect(
+        host= os.getenv("MYSQL_HOST"),
+        user= os.getenv("MYSQL_USER")",
+        password= os.getenv("MYSQL_PASSWORD"),
+        database= os.getenv("MYSQL_DB"),
+        port=os.getenv("MYSQL_PORT")
+    )
+
+# Fungsi mengirim pesan biasa
+def send_message(chat_id, text):
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {"chat_id": chat_id, "text": text}
+    requests.post(url, json=payload)
+
 # Fungsi mengirim pesan dengan keyboard interaktif
 def send_message_with_keyboard(chat_id, text, keyboard):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
@@ -25,8 +42,112 @@ def send_message_with_keyboard(chat_id, text, keyboard):
     }
     requests.post(url, json=payload)
 
-# Fungsi menampilkan welcome message dengan daftar kategori dan tombol interaktif
-def send_welcome_message(user_id):
+def get_user_sessions(user_id):
+    """Mengambil daftar sesi coaching user dari database."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT session_id, active FROM coaching_sessions WHERE user_id = %s", (user_id,))
+    sessions = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    if not sessions:  # Pastikan tidak mengembalikan None
+        return []
+
+    return [(s[0], s[1]) for s in sessions]  # Kembalikan dalam format tuple (session_id, active)
+
+def get_user_active_session(user_id):
+    """Mengambil sesi aktif user dari database."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT session_id, goal_coaching, chat_history, chat_summary FROM coaching_sessions WHERE user_id = %s AND active = TRUE", (user_id,))
+    session = cursor.fetchone()
+    
+    cursor.close()
+    conn.close()
+    
+    if session:
+        return {
+            "session_id": session[0],
+            "goal_coaching": session[1],
+            "chat_history": session[2] if session[2] else "[]",  # Pastikan JSON valid
+            "chat_summary": session[3] if session[3] else ""
+        }
+    return {}  # Kembalikan dictionary kosong jika tidak ada sesi aktif
+
+def set_active_session(user_id, session_id):
+    """Mengaktifkan sesi tertentu dan menonaktifkan yang lain."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Nonaktifkan semua sesi user
+    cursor.execute("UPDATE coaching_sessions SET active = FALSE WHERE user_id = %s", (user_id,))
+    
+    # Aktifkan sesi yang dipilih
+    cursor.execute("UPDATE coaching_sessions SET active = TRUE WHERE user_id = %s AND session_id = %s", (user_id, session_id))
+    
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+def deactivate_user_sessions(user_id):
+    """Menonaktifkan semua sesi lama user tanpa menghapusnya."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("UPDATE coaching_sessions SET active = FALSE WHERE user_id = %s", (user_id,))
+    
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+def delete_session(user_id, session_id):
+    """Menghapus sesi tertentu dari database berdasarkan session_id."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("DELETE FROM coaching_sessions WHERE user_id = %s AND session_id = %s", (user_id, session_id))
+    
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+def delete_all_sessions(user_id):
+    """Menghapus semua sesi user dari database."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("DELETE FROM coaching_sessions WHERE user_id = %s", (user_id,))
+    
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+def create_new_session(user_id):
+    """Membuat sesi coaching baru untuk user dan menonaktifkan sesi sebelumnya."""
+    deactivate_user_sessions(user_id)  # Nonaktifkan sesi lama sebelum membuat sesi baru
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Buat sesi baru
+    cursor.execute(
+        "INSERT INTO coaching_sessions (user_id, goal_coaching, chat_history, chat_summary, active) VALUES (%s, '', '', '', TRUE)",
+        (user_id,)
+    )
+    
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    # Cek apakah user memiliki sesi lain selain yang baru dibuat
+    session_list = get_user_sessions(user_id)
+    has_sessions = len(session_list) > 1  # Karena sesi baru sudah dibuat, maka harus lebih dari 1
+
+    # Kategori coaching
     categories = {
         "1": "Aku merasa stuck, tapi nggak tahu harus mulai dari mana.",
         "2": "Banyak ide, tapi sulit mengeksekusi.",
@@ -41,6 +162,8 @@ def send_welcome_message(user_id):
     }
     
     category_text = "\n".join([f"{key}. {value}" for key, value in categories.items()])
+    
+    # Pesan selamat datang langsung di sini
     welcome_message = (
         "👋 *Selamat datang di Coach Curhat!* 😊\n\n"
         "Saya di sini untuk membantu Anda menemukan solusi sendiri melalui refleksi dan coaching.\n"
@@ -48,7 +171,8 @@ def send_welcome_message(user_id):
         f"{category_text}\n\n"
         "Atau Anda bisa langsung mengetik pesan untuk memulai percakapan."
     )
-    
+
+    # Tombol interaktif
     keyboard = {
         "inline_keyboard": [
             [{"text": "💙 Donasi", "url": "https://trakteer.id/coachcurhat"}],
@@ -56,93 +180,50 @@ def send_welcome_message(user_id):
             [{"text": "📞 Kontak", "callback_data": "kontak"}]
         ]
     }
-    
+
+    # **Jika user memiliki sesi lain, tambahkan tombol Pilih Sesi & Hapus Sesi**
+    if has_sessions:
+        keyboard["inline_keyboard"].append([{"text": "📋 Pilih Sesi", "callback_data": "sessions"}])
+        keyboard["inline_keyboard"].append([{"text": "🗑️ Hapus Sesi", "callback_data": "delete_session"}])
+
+    # Kirim pesan selamat datang dengan tombol interaktif
     send_message_with_keyboard(user_id, welcome_message, keyboard)
-
-def get_db_connection():
-    """Membuat koneksi ke database MySQL."""
-    return mysql.connector.connect(
-        host= os.getenv("MYSQL_HOST"),
-        user= os.getenv("MYSQL_USER"),
-        password= os.getenv("MYSQL_PASSWORD"),
-        database= os.getenv("MYSQL_DB"),
-        port=3306
-    )
-
-def create_db():
-    """Ensure the coaching_sessions table exists with category_selected as INTEGER."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS coaching_sessions (
-            user_id VARCHAR(255) PRIMARY KEY,
-            goal_coaching TEXT,
-            chat_history TEXT,
-            chat_summary TEXT,
-            category_selected BOOLEAN DEFAULT 0
-        )
-    """)
-    conn.commit()
-    conn.close()
-
-def reset_user_session(user_id):
-    """Menghapus session coaching user dari database agar bisa mulai percakapan baru."""
-    db.execute("DELETE FROM coaching_sessions WHERE user_id = %s", (user_id,))
-    db.commit()
-
-def insert_or_get_coaching_session(user_id):
-    """Ensure coaching session exists, or create a new one if missing."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO coaching_sessions (user_id, goal_coaching, chat_history, chat_summary, category_selected) 
-        VALUES (%s, '', '', '', 0) 
-        ON DUPLICATE KEY UPDATE user_id=user_id
-    """, (user_id,))
-    conn.commit()
-    
-    cursor.execute("""
-        SELECT goal_coaching, chat_history, chat_summary, category_selected 
-        FROM coaching_sessions WHERE user_id = %s
-    """, (user_id,))
-    row = cursor.fetchone()
-    conn.close()
-    
-    return {
-        "goal_coaching": row[0],
-        "chat_history": row[1],
-        "chat_summary": row[2],
-        "category_selected": bool(row[3])
-    } if row else {
-        "goal_coaching": "",
-        "chat_history": "",
-        "chat_summary": "",
-        "category_selected": False
-    }
 
 def update_coaching_session(user_id, session, chat_last, coaching_output, category_selected=False):
     """Update chat history, summary, and category selection in the database."""
-    existing_chat_history = json.loads(session['chat_history']) if session['chat_history'] else []
+    existing_chat_history = json.loads(session.get('chat_history', '[]'))  # Pastikan JSON valid
     existing_chat_history.append({"role": "user", "content": chat_last})
     existing_chat_history.append({"role": "assistant", "content": coaching_output})
+    
     new_chat_history = json.dumps(existing_chat_history)
     session['chat_history'] = new_chat_history
     chat_summary = session.get("chat_summary", "")
-    updated_goal = ""
+    session_id = session.get("session_id")  # Gunakan session_id agar lebih spesifik
     
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
         UPDATE coaching_sessions
-        SET chat_history = COALESCE(%s, chat_history), 
-            chat_summary = COALESCE(%s, chat_summary), 
-            goal_coaching = COALESCE(%s, goal_coaching),
+        SET chat_history = %s, 
+            chat_summary = %s, 
             category_selected = %s
-        WHERE user_id = %s
-    """, (new_chat_history, chat_summary, updated_goal, int(category_selected), user_id))
+        WHERE user_id = %s AND session_id = %s
+    """, (new_chat_history, chat_summary, int(category_selected), user_id, session_id))
     
     conn.commit()
+    cursor.close()
     conn.close()
+
+def send_to_openai(prompt):
+    """Send prompt to OpenAI and return response."""
+    
+    client = openai.OpenAI(api_key=OPENAI_API_KEY)
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=prompt
+    )
+    coaching_output = response.choices[0].message.content.strip()
+    return coaching_output
 
 def generate_prompt(user_id, chat_last, session):
     """Generate prompt for CustomGPT based on coaching data."""
@@ -225,22 +306,124 @@ Tujuan utama adalah membimbing klien secara bertahap dan interaktif, dengan memf
     prompt = [{"role": "system", "content": instructions}] + chat_history + [{"role": "user", "content": str(chat_last)}]
     return prompt
 
-def send_to_openai(prompt):
-    """Send prompt to OpenAI and return response."""
-    
-    client = openai.OpenAI(api_key=OPENAI_API_KEY)
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=prompt
-    )
-    coaching_output = response.choices[0].message.content.strip()
-    return coaching_output
+def handle_new_session(user_id):
+    """Menonaktifkan sesi lama dan membuat sesi baru."""
+    deactivate_user_sessions(user_id)
+    create_new_session(user_id)
+    return "OK", 200
 
-# Fungsi untuk mengirim pesan ke Telegram
-def send_message(chat_id, text):
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": chat_id, "text": text}
-    requests.post(url, json=payload)
+def handle_switch_session(user_id, session_id):
+    """Mengaktifkan sesi yang dipilih oleh user."""
+    if session_id in [s[0] for s in get_user_sessions(user_id)]:
+        set_active_session(user_id, session_id)
+        send_message(user_id, f"🔄 Sesi {session_id} telah diaktifkan. Silakan lanjutkan coaching.")
+    else:
+        send_message(user_id, "⚠️ Sesi tidak ditemukan. Gunakan `/sessions` untuk melihat daftar sesi.")
+    return "OK", 200
+
+def handle_list_sessions(user_id):
+    """Menampilkan daftar sesi coaching user dalam bentuk tombol interaktif."""
+    session_list = get_user_sessions(user_id)
+
+    if not session_list:
+        send_message(user_id, "⚠️ Kamu belum memiliki sesi. Ketik `/new_session` untuk memulai sesi baru.")
+        return "OK", 200
+
+    reply = "📋 **Pilih sesi yang ingin kamu aktifkan:**"
+    keyboard = {"inline_keyboard": []}
+
+    for session_id, active in session_list:
+        status = "✅ Aktif" if active else "⚪ Tidak aktif"
+        keyboard["inline_keyboard"].append([
+            {"text": f"Sesi {session_id} ({status})", "callback_data": f"switch_session_{session_id}"}
+        ])
+
+    # Tambahkan tombol kembali ke awal
+    keyboard["inline_keyboard"].append([
+        {"text": "🔙 Kembali ke Awal", "callback_data": "start"}
+    ])
+
+    send_message_with_keyboard(user_id, reply, keyboard)
+    return "OK", 200
+
+def handle_delete_session(user_id):
+    """Menampilkan daftar sesi yang bisa dihapus."""
+    session_list = get_user_sessions(user_id)
+
+    if not session_list:
+        send_message(user_id, "⚠️ Kamu belum memiliki sesi yang bisa dihapus.")
+        return "OK", 200
+
+    reply = "🗑️ **Pilih sesi yang ingin kamu hapus:**"
+    keyboard = {"inline_keyboard": []}
+
+    for session_id, _ in session_list:
+        keyboard["inline_keyboard"].append([
+            {"text": f"Hapus Sesi {session_id}", "callback_data": f"confirm_delete_{session_id}"}
+        ])
+
+    # Tambahkan opsi hapus semua sesi
+    keyboard["inline_keyboard"].append([
+        {"text": "🗑️ Hapus Semua Sesi", "callback_data": "confirm_delete_all"}
+    ])
+
+    # Tambahkan tombol kembali ke awal
+    keyboard["inline_keyboard"].append([
+        {"text": "🔙 Kembali ke Awal", "callback_data": "start"}
+    ])
+
+    send_message_with_keyboard(user_id, reply, keyboard)
+    return "OK", 200
+
+def send_welcome_message(user_id):
+    """Menampilkan menu utama tanpa membuat sesi baru atau menonaktifkan sesi lama."""
+    
+    # Cek apakah user sudah memiliki sesi aktif
+    session_list = get_user_sessions(user_id)
+    has_sessions = len(session_list) > 0  # Jika ada sesi, user sudah memiliki sesi
+
+    # Kategori coaching
+    categories = {
+        "1": "Aku merasa stuck, tapi nggak tahu harus mulai dari mana.",
+        "2": "Banyak ide, tapi sulit mengeksekusi.",
+        "3": "Takut gagal, jadi nggak mulai-mulai.",
+        "4": "Ingin berubah, tapi susah konsisten.",
+        "5": "Kurang percaya diri mengambil keputusan besar.",
+        "6": "Sudah coba banyak cara, tapi belum dapat hasil.",
+        "7": "Overthinking sebelum bertindak, gimana biar lebih action-oriented?",
+        "8": "Ingin produktif, tapi gampang terdistraksi.",
+        "9": "Stuck di zona nyaman, tapi ragu mau keluar.",
+        "10": "Tahu harus ngapain, tapi sulit melakukannya."
+    }
+    
+    category_text = "\n".join([f"{key}. {value}" for key, value in categories.items()])
+    
+    # Pesan utama tanpa mengubah sesi aktif
+    welcome_message = (
+        "👋 *Selamat datang kembali di Coach Curhat!* 😊\n\n"
+        "Saya di sini untuk membantu Anda menemukan solusi sendiri melalui refleksi dan coaching.\n"
+        "Silakan pilih salah satu kategori di bawah ini dengan mengetik angkanya:\n\n"
+        f"{category_text}\n\n"
+        "Atau Anda bisa langsung mengetik pesan untuk memulai percakapan."
+    )
+
+    # Tombol interaktif
+    keyboard = {
+        "inline_keyboard": [
+            [{"text": "💙 Donasi", "url": "https://trakteer.id/coachcurhat"}],
+            [{"text": "ℹ️ Info", "callback_data": "info"}],
+            [{"text": "📞 Kontak", "callback_data": "kontak"}]
+        ]
+    }
+
+    # Jika user sudah memiliki sesi, tambahkan tombol "Pilih Sesi" & "Hapus Sesi"
+    if has_sessions:
+        keyboard["inline_keyboard"].append([{"text": "📋 Pilih Sesi", "callback_data": "sessions"}])
+        keyboard["inline_keyboard"].append([{"text": "🗑️ Hapus Sesi", "callback_data": "delete_session"}])
+
+    # Kirim pesan selamat datang dengan tombol interaktif tanpa mengubah sesi
+    send_message_with_keyboard(user_id, welcome_message, keyboard)
+    return "OK", 200
 
 @app.route(f"/webhook/{TELEGRAM_BOT_TOKEN}", methods=["POST"])
 def webhook():
@@ -250,60 +433,129 @@ def webhook():
         if "message" in update:
             user_id = update["message"]["chat"]["id"]
             incoming_msg = update["message"]["text"].strip()
-            session = insert_or_get_coaching_session(user_id)  # Ensure session exists
-            
-            categories = {
-                "1": "Aku merasa stuck, tapi nggak tahu harus mulai dari mana.",
-                "2": "Banyak ide, tapi sulit mengeksekusi.",
-                "3": "Takut gagal, jadi nggak mulai-mulai.",
-                "4": "Ingin berubah, tapi susah konsisten.",
-                "5": "Kurang percaya diri mengambil keputusan besar.",
-                "6": "Sudah coba banyak cara, tapi belum dapat hasil.",
-                "7": "Overthinking sebelum bertindak, gimana biar lebih action-oriented?",
-                "8": "Ingin produktif, tapi gampang terdistraksi.",
-                "9": "Stuck di zona nyaman, tapi ragu mau keluar.",
-                "10": "Tahu harus ngapain, tapi sulit melakukannya."
-            }
             
             if incoming_msg.lower() == "/start":
-                reset_user_session(user_id)  # Hapus session lama dari database
-                send_welcome_message(user_id)
+                session_list = get_user_sessions(user_id)
+            
+                if session_list:
+                    reply = "📋 **Sesi sebelumnya ditemukan. Pilih sesi atau buat sesi baru:**\n"
+                    keyboard = {"inline_keyboard": []}
+            
+                    for session_id, active in session_list:
+                        status = "✅ Aktif" if active else "⚪ Tidak aktif"
+                        keyboard["inline_keyboard"].append([
+                            {"text": f"Sesi {session_id} ({status})", "callback_data": f"switch_session_{session_id}"}
+                        ])
+            
+                    keyboard["inline_keyboard"].append([
+                        {"text": "➕ Buat Sesi Baru", "callback_data": "new_session"}
+                    ])
+                    keyboard["inline_keyboard"].append([
+                        {"text": "🗑️ Hapus Sesi", "callback_data": "delete_session"}
+                    ])
+            
+                    send_message_with_keyboard(user_id, reply, keyboard)
+                else:
+                    create_new_session(user_id)                    
+            
                 return "OK", 200
             
-            elif not session['category_selected']:
-                if incoming_msg in categories:
-                    first_msg = categories[incoming_msg]                    
-                    prompt = generate_prompt(user_id, first_msg, session)                    
+            elif incoming_msg.lower() == "/new_session":
+                return handle_new_session(user_id)
+            
+            elif incoming_msg.lower().startswith("/switch_session"):
+                try:
+                    session_id = int(incoming_msg.split()[1])
+                    return handle_switch_session(user_id, session_id)
+                except (IndexError, ValueError):
+                    send_message(user_id, "⚠️ Format salah! Gunakan `/switch_session [ID]`.")
+                    return "OK", 200
+            
+            elif incoming_msg.lower() == "/sessions":
+                return handle_list_sessions(user_id)
+            
+            elif incoming_msg.lower().startswith("/delete_session"):
+                try:
+                    session_id = int(incoming_msg.split()[1])
+                    return handle_delete_session(user_id, session_id)
+                except (IndexError, ValueError):
+                    send_message(user_id, "⚠️ Format salah! Gunakan `/delete_session [ID]`.")
+                    return "OK", 200
+            
+            # Generate prompt and send to OpenAI for coaching response
+            else:
+                session = get_user_active_session(user_id)
+                
+                if not session:
+                    send_message(user_id, "⚠️ Tidak ada sesi aktif. Ketik `/start` untuk memulai sesi baru.")
+                    return "OK", 200
+            
+                categories = {
+                    "1": "Aku merasa stuck, tapi nggak tahu harus mulai dari mana.",
+                    "2": "Banyak ide, tapi sulit mengeksekusi.",
+                    "3": "Takut gagal, jadi nggak mulai-mulai.",
+                    "4": "Ingin berubah, tapi susah konsisten.",
+                    "5": "Kurang percaya diri mengambil keputusan besar.",
+                    "6": "Sudah coba banyak cara, tapi belum dapat hasil.",
+                    "7": "Overthinking sebelum bertindak, gimana biar lebih action-oriented?",
+                    "8": "Ingin produktif, tapi gampang terdistraksi.",
+                    "9": "Stuck di zona nyaman, tapi ragu mau keluar.",
+                    "10": "Tahu harus ngapain, tapi sulit melakukannya."
+                }
+            
+                # **Cek apakah user mengetik angka sebagai kategori**
+                if not session.get("category_selected", False) and incoming_msg in categories:
+                    first_msg = categories[incoming_msg]  # Ubah angka ke teks kategori
+                    prompt = generate_prompt(user_id, first_msg, session)
                     coaching_output = send_to_openai(prompt)
-                    update_coaching_session(user_id, session, first_msg, coaching_output, category_selected=True)
-                    reply = coaching_output
-                else:
-                    prompt = generate_prompt(user_id, incoming_msg, session)
-                    coaching_output = send_to_openai(prompt)
-                    update_coaching_session(user_id, session, incoming_msg, coaching_output)
-                    reply = coaching_output
-            else:                
+                    update_coaching_session(user_id, session, first_msg, coaching_output, category_selected=True)  # Set kategori terpilih
+                    send_message(user_id, coaching_output)
+                    return "OK", 200
+            
+                # Jika bukan kategori, kirim sebagai input biasa ke OpenAI
                 prompt = generate_prompt(user_id, incoming_msg, session)
                 coaching_output = send_to_openai(prompt)
                 update_coaching_session(user_id, session, incoming_msg, coaching_output)
-                reply = coaching_output
-            
-            send_message(user_id, reply)
-            return "OK", 200
-        
+                send_message(user_id, coaching_output)
+                return "OK", 200
+
         elif "callback_query" in update:
             callback_data = update["callback_query"]["data"]
             user_id = update["callback_query"]["from"]["id"]
             
             if callback_data == "info":
-                send_message(user_id, "ℹ️ *Tentang Coach Curhat*
-
-Coach Curhat adalah chatbot yang dirancang untuk membantu Anda menemukan solusi atas tantangan hidup melalui refleksi dan coaching. Tidak seperti chat biasa, Coach Curhat akan memberikan pertanyaan yang membimbing Anda untuk berpikir lebih jernih, memahami diri sendiri, dan menemukan jawaban yang tepat untuk situasi Anda.
-
-Cukup ketik pertanyaan atau pilih kategori yang sesuai, dan biarkan chatbot ini membantu Anda mengeksplorasi solusi yang lebih baik! 😊")
+                send_message(user_id, "ℹ️ *Tentang Coach Curhat*\n\nCoach Curhat adalah chatbot yang dirancang untuk membantu Anda menemukan solusi atas tantangan hidup melalui refleksi dan coaching.")
             elif callback_data == "kontak":
                 send_message(user_id, "📞 Kontak: Anda dapat menghubungi admin di email: coachcurhat@gmail.com")
+
+            elif callback_data == "start":
+                return send_welcome_message(user_id)  # Hanya menampilkan menu tanpa mengubah sesi
+
+            elif callback_data.startswith("switch_session_"):
+                session_id = int(callback_data.split("_")[2])  # Ambil session ID
+                return handle_switch_session(user_id, session_id)
+        
+            elif callback_data == "new_session":
+                return handle_new_session(user_id)
+        
+            elif callback_data == "delete_session":
+                return handle_delete_session(user_id)  # Akan menampilkan list sesi untuk dihapus
+        
+            elif callback_data == "sessions":
+                return handle_list_sessions(user_id)  # Langsung gunakan fungsi yang sudah ada
+        
+            elif callback_data.startswith("confirm_delete_"):
+                session_id = callback_data.split("_")[2]
+                
+                if session_id == "all":
+                    delete_all_sessions(user_id)  # Hapus semua sesi
+                    send_message(user_id, "✅ Semua sesi telah dihapus.")
+                else:
+                    delete_session(user_id, session_id)
+                    send_message(user_id, f"✅ Sesi {session_id} telah dihapus.")
             
+                return "OK", 200
+
             return "OK", 200
         
     except Exception as e:
@@ -313,6 +565,21 @@ Cukup ketik pertanyaan atau pilih kategori yang sesuai, dan biarkan chatbot ini 
 @app.route('/')
 def home():
     return "Chatbot is running!", 200
+
+if __name__ == "X__main__":
+    port = 5003
+    if "KAGGLE_KERNEL_RUN_MODE" in os.environ:
+        public_url = ngrok.connect("5003", "http")
+        print(f"New Public URL: {public_url}")
+        
+        def run_flask():
+            app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
+        
+        Thread(target=run_flask).start()
+    else:
+        public_url = ngrok.connect("5003", "http")
+        print(f"New Public URL: {public_url}")
+        app.run(host="0.0.0.0", port=port, debug=True, use_reloader=False)
         
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5003, debug=True)
