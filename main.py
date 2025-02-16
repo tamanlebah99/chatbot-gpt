@@ -85,6 +85,11 @@ def create_db():
     conn.commit()
     conn.close()
 
+def reset_user_session(user_id):
+    """Menghapus session coaching user dari database agar bisa mulai percakapan baru."""
+    db.execute("DELETE FROM coaching_sessions WHERE user_id = ?", (user_id,))
+    db.commit()
+
 def insert_or_get_coaching_session(user_id):
     """Ensure coaching session exists, or create a new one if missing."""
     conn = get_db_connection()
@@ -261,6 +266,7 @@ def webhook():
             }
             
             if incoming_msg.lower() == "/start":
+                reset_user_session(user_id)  # Hapus session lama dari database
                 send_welcome_message(user_id)
                 return "OK", 200
             
