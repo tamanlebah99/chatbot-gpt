@@ -87,7 +87,7 @@ def create_db():
 
 def reset_user_session(user_id):
     """Menghapus session coaching user dari database agar bisa mulai percakapan baru."""
-    db.execute("DELETE FROM coaching_sessions WHERE user_id = ?", (user_id,))
+    db.execute("DELETE FROM coaching_sessions WHERE user_id = %s", (user_id,))
     db.commit()
 
 def insert_or_get_coaching_session(user_id):
