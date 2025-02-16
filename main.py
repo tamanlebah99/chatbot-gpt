@@ -1,4 +1,3 @@
-#from pyngrok import ngrok
 from flask import Flask, request, jsonify
 from threading import Thread
 import json
@@ -14,6 +13,51 @@ session = {}
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 OPENAI_API_KEY =  os.getenv("OPENAI_API_KEY")
 openai.api_key = OPENAI_API_KEY
+
+# Fungsi mengirim pesan dengan keyboard interaktif
+def send_message_with_keyboard(chat_id, text, keyboard):
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": "Markdown",
+        "reply_markup": json.dumps(keyboard)
+    }
+    requests.post(url, json=payload)
+
+# Fungsi menampilkan welcome message dengan daftar kategori dan tombol interaktif
+def send_welcome_message(user_id):
+    categories = {
+        "1": "Aku merasa stuck, tapi nggak tahu harus mulai dari mana.",
+        "2": "Banyak ide, tapi sulit mengeksekusi.",
+        "3": "Takut gagal, jadi nggak mulai-mulai.",
+        "4": "Ingin berubah, tapi susah konsisten.",
+        "5": "Kurang percaya diri mengambil keputusan besar.",
+        "6": "Sudah coba banyak cara, tapi belum dapat hasil.",
+        "7": "Overthinking sebelum bertindak, gimana biar lebih action-oriented?",
+        "8": "Ingin produktif, tapi gampang terdistraksi.",
+        "9": "Stuck di zona nyaman, tapi ragu mau keluar.",
+        "10": "Tahu harus ngapain, tapi sulit melakukannya."
+    }
+    
+    category_text = "\n".join([f"{key}. {value}" for key, value in categories.items()])
+    welcome_message = (
+        "👋 *Selamat datang di Coach Curhat!* 😊\n\n"
+        "Saya di sini untuk membantu Anda menemukan solusi sendiri melalui refleksi dan coaching.\n"
+        "Silakan pilih salah satu kategori di bawah ini dengan mengetik angkanya:\n\n"
+        f"{category_text}\n\n"
+        "Atau Anda bisa langsung mengetik pesan untuk memulai percakapan."
+    )
+    
+    keyboard = {
+        "inline_keyboard": [
+            [{"text": "💙 Donasi", "url": "https://trakteer.id/coachcurhat"}],
+            [{"text": "ℹ️ Info", "callback_data": "info"}],
+            [{"text": "📞 Kontak", "callback_data": "kontak"}]
+        ]
+    }
+    
+    send_message_with_keyboard(user_id, welcome_message, keyboard)
 
 def get_db_connection():
     """Membuat koneksi ke database MySQL."""
@@ -195,12 +239,9 @@ def send_message(chat_id, text):
 
 @app.route(f"/webhook/{TELEGRAM_BOT_TOKEN}", methods=["POST"])
 def webhook():
-    """Handle incoming WhatsApp messages via Twilio."""
+    """Handle incoming Telegram messages."""
     try:
-        reply = ""
-        user_id = ""
         update = request.json
-        
         if "message" in update:
             user_id = update["message"]["chat"]["id"]
             incoming_msg = update["message"]["text"].strip()
@@ -218,21 +259,19 @@ def webhook():
                 "9": "Stuck di zona nyaman, tapi ragu mau keluar.",
                 "10": "Tahu harus ngapain, tapi sulit melakukannya."
             }
-            coaching_output = "✨ Selamat datang di CoachBot 4AA! ✨\n\nSaya di sini untuk membantu Anda menemukan solusi sendiri melalui refleksi dan coaching.\n\nSilakan pilih salah satu topik coaching berikut:\n"
-            if incoming_msg.lower() == "/start":  # Tangani command start dengan sambutan
-                reply = "✨ Selamat datang di CoachBot 4AA! ✨\n\nSaya di sini untuk membantu Anda menemukan solusi sendiri melalui refleksi dan coaching.\n\nSilakan pilih salah satu topik coaching berikut:\n"
-                for key, value in categories.items():
-                    reply += f"{key}. {value}\n"
-                reply += "\nKetik angka kategori yang kamu pilih untuk memulai."
             
-            elif not session['category_selected']:  # Jika user belum memilih kategori
-                if incoming_msg in categories:  # Jika user memilih angka kategori          
+            if incoming_msg.lower() == "/start":
+                send_welcome_message(user_id)
+                return "OK", 200
+            
+            elif not session['category_selected']:
+                if incoming_msg in categories:
                     first_msg = categories[incoming_msg]                    
                     prompt = generate_prompt(user_id, first_msg, session)                    
                     coaching_output = send_to_openai(prompt)
                     update_coaching_session(user_id, session, first_msg, coaching_output, category_selected=True)
                     reply = coaching_output
-                else:  # Jika user mengetik bebas, langsung tanggapi tanpa menampilkan kategori lagi
+                else:
                     prompt = generate_prompt(user_id, incoming_msg, session)
                     coaching_output = send_to_openai(prompt)
                     update_coaching_session(user_id, session, incoming_msg, coaching_output)
@@ -243,10 +282,20 @@ def webhook():
                 update_coaching_session(user_id, session, incoming_msg, coaching_output)
                 reply = coaching_output
             
-        # Kirim balasan ke Telegram
-        send_message(user_id, reply)
-        return "OK", 200
-    
+            send_message(user_id, reply)
+            return "OK", 200
+        
+        elif "callback_query" in update:
+            callback_data = update["callback_query"]["data"]
+            user_id = update["callback_query"]["from"]["id"]
+            
+            if callback_data == "info":
+                send_message(user_id, "ℹ️ Info: Coach Curhat adalah chatbot yang membantu Anda mencari solusi melalui refleksi dan coaching.")
+            elif callback_data == "kontak":
+                send_message(user_id, "📞 Kontak: Anda dapat menghubungi admin di email: admin@coachcurhat.com")
+            
+            return "OK", 200
+        
     except Exception as e:
         print(f"🔥 Error terjadi: {e}")  # Log error di server
         return "Internal Server Error", 500
