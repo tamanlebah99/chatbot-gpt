@@ -149,27 +149,28 @@ def create_new_session(user_id):
 
     # Kategori coaching
     categories = {
-        "1": "Aku merasa stuck, tapi nggak tahu harus mulai dari mana.",
-        "2": "Banyak ide, tapi sulit mengeksekusi.",
-        "3": "Takut gagal, jadi nggak mulai-mulai.",
-        "4": "Ingin berubah, tapi susah konsisten.",
-        "5": "Kurang percaya diri mengambil keputusan besar.",
-        "6": "Sudah coba banyak cara, tapi belum dapat hasil.",
-        "7": "Overthinking sebelum bertindak, gimana biar lebih action-oriented?",
-        "8": "Ingin produktif, tapi gampang terdistraksi.",
-        "9": "Stuck di zona nyaman, tapi ragu mau keluar.",
-        "10": "Tahu harus ngapain, tapi sulit melakukannya."
+        "1": "Stuck, Bingung Mulai",
+        "2": "Kebanyakan Ide, No Action",
+        "3": "Takut Gagal",
+        "4": "Susah Konsisten",
+        "5": "Kurang Percaya Diri",
+        "6": "Usaha Belum Berhasil",
+        "7": "Overthinking Parah",
+        "8": "Mudah Terdistraksi",
+        "9": "Zona Nyaman vs Tantangan",
+        "10": "Tahu Harus Ngapain, Tapi..."
     }
+
     
     category_text = "\n".join([f"{key}. {value}" for key, value in categories.items()])
     
     # Pesan selamat datang langsung di sini
     welcome_message = (
         "👋 *Selamat datang di Coach Curhat!* 😊\n\n"
-        "Saya di sini untuk membantu Anda menemukan solusi sendiri melalui refleksi dan coaching.\n"
+        "Saya di sini untuk membantu Kamu menemukan solusi sendiri melalui refleksi dan coaching.\n"
         "Silakan pilih salah satu kategori di bawah ini dengan mengetik angkanya:\n\n"
         f"{category_text}\n\n"
-        "Atau Anda bisa langsung mengetik pesan untuk memulai percakapan."
+        "Atau Kamu bisa langsung mengetik pesan untuk memulai percakapan."
     )
 
     # Tombol interaktif
@@ -231,7 +232,7 @@ def generate_prompt(user_id, chat_last, session):
     instructionsX = "Kamu adalah CoachBot 4AA, AI Coach berbasis metode 4AA yang membantu coachee menemukan solusi sendiri melalui pertanyaan reflektif. Kamu tidak memberi jawaban langsung, tetapi membimbing coachee berpikir lebih dalam. Jangan menjawab pertanyaan faktual atau permintaan di luar coaching. Fokus pada tujuan coachee dan gunakan framework 4AA dalam responmu."
     instructions = f"""
 1. Persona & Peran
-Anda adalah Coach Curhat, seorang Coach berbasis NLP yang membantu klien menemukan solusi mereka sendiri melalui pertanyaan eksploratif. Coaching harus bertahap, interaktif, dan fokus pada eksplorasi diri klien.
+Kamu adalah Coach Curhat, seorang Coach berbasis NLP yang membantu klien menemukan solusi mereka sendiri melalui pertanyaan eksploratif. Coaching harus bertahap, interaktif, dan fokus pada eksplorasi diri klien.
 
 2. Pendekatan Coaching & Gaya Komunikasi
 - Jawablah dengan pertanyaan bertahap agar klien mengeksplorasi pikirannya sendiri.
@@ -388,27 +389,28 @@ def send_welcome_message(user_id):
 
     # Kategori coaching
     categories = {
-        "1": "Aku merasa stuck, tapi nggak tahu harus mulai dari mana.",
-        "2": "Banyak ide, tapi sulit mengeksekusi.",
-        "3": "Takut gagal, jadi nggak mulai-mulai.",
-        "4": "Ingin berubah, tapi susah konsisten.",
-        "5": "Kurang percaya diri mengambil keputusan besar.",
-        "6": "Sudah coba banyak cara, tapi belum dapat hasil.",
-        "7": "Overthinking sebelum bertindak, gimana biar lebih action-oriented?",
-        "8": "Ingin produktif, tapi gampang terdistraksi.",
-        "9": "Stuck di zona nyaman, tapi ragu mau keluar.",
-        "10": "Tahu harus ngapain, tapi sulit melakukannya."
+        "1": "Stuck, Bingung Mulai",
+        "2": "Kebanyakan Ide, No Action",
+        "3": "Takut Gagal",
+        "4": "Susah Konsisten",
+        "5": "Kurang Percaya Diri",
+        "6": "Usaha Belum Berhasil",
+        "7": "Overthinking Parah",
+        "8": "Mudah Terdistraksi",
+        "9": "Zona Nyaman vs Tantangan",
+        "10": "Tahu Harus Ngapain, Tapi..."
     }
+
     
     category_text = "\n".join([f"{key}. {value}" for key, value in categories.items()])
     
     # Pesan utama tanpa mengubah sesi aktif
     welcome_message = (
         "👋 *Selamat datang kembali di Coach Curhat!* 😊\n\n"
-        "Saya di sini untuk membantu Anda menemukan solusi sendiri melalui refleksi dan coaching.\n"
+        "Saya di sini untuk membantu Kamu menemukan solusi sendiri melalui refleksi dan coaching.\n"
         "Silakan pilih salah satu kategori di bawah ini dengan mengetik angkanya:\n\n"
         f"{category_text}\n\n"
-        "Atau Anda bisa langsung mengetik pesan untuk memulai percakapan."
+        "Atau Kamu bisa langsung mengetik pesan untuk memulai percakapan."
     )
 
     # Tombol interaktif
@@ -495,17 +497,18 @@ def webhook():
                     return "OK", 200
             
                 categories = {
-                    "1": "Aku merasa stuck, tapi nggak tahu harus mulai dari mana.",
-                    "2": "Banyak ide, tapi sulit mengeksekusi.",
-                    "3": "Takut gagal, jadi nggak mulai-mulai.",
-                    "4": "Ingin berubah, tapi susah konsisten.",
-                    "5": "Kurang percaya diri mengambil keputusan besar.",
-                    "6": "Sudah coba banyak cara, tapi belum dapat hasil.",
-                    "7": "Overthinking sebelum bertindak, gimana biar lebih action-oriented?",
-                    "8": "Ingin produktif, tapi gampang terdistraksi.",
-                    "9": "Stuck di zona nyaman, tapi ragu mau keluar.",
-                    "10": "Tahu harus ngapain, tapi sulit melakukannya."
+                    "1": "Stuck, Bingung Mulai",
+                    "2": "Kebanyakan Ide, No Action",
+                    "3": "Takut Gagal",
+                    "4": "Susah Konsisten",
+                    "5": "Kurang Percaya Diri",
+                    "6": "Usaha Belum Berhasil",
+                    "7": "Overthinking Parah",
+                    "8": "Mudah Terdistraksi",
+                    "9": "Zona Nyaman vs Tantangan",
+                    "10": "Tahu Harus Ngapain, Tapi..."
                 }
+
             
                 # **Cek apakah user mengetik angka sebagai kategori**
                 if not session.get("category_selected", False) and incoming_msg in categories:
@@ -528,9 +531,9 @@ def webhook():
             user_id = update["callback_query"]["from"]["id"]
             
             if callback_data == "info":
-                send_message(user_id, "ℹ️ *Tentang Coach Curhat*\n\nCoach Curhat adalah chatbot yang dirancang untuk membantu Anda menemukan solusi atas tantangan hidup melalui refleksi dan coaching.")
+                send_message(user_id, "ℹ️ *Tentang Coach Curhat*\n\nCoach Curhat adalah chatbot yang dirancang untuk membantu Kamu menemukan solusi atas tantangan hidup melalui refleksi dan coaching.")
             elif callback_data == "kontak":
-                send_message(user_id, "📞 Kontak: Anda dapat menghubungi admin di email: coachcurhat@gmail.com")
+                send_message(user_id, "📞 Kontak: Kamu dapat menghubungi admin di email: coachcurhat@gmail.com")
 
             elif callback_data == "start":
                 return send_welcome_message(user_id)  # Hanya menampilkan menu tanpa mengubah sesi
