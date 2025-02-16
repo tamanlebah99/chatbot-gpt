@@ -290,9 +290,13 @@ def webhook():
             user_id = update["callback_query"]["from"]["id"]
             
             if callback_data == "info":
-                send_message(user_id, "ℹ️ Info: Coach Curhat adalah chatbot yang membantu Anda mencari solusi melalui refleksi dan coaching.")
+                send_message(user_id, "ℹ️ *Tentang Coach Curhat*
+
+Coach Curhat adalah chatbot yang dirancang untuk membantu Anda menemukan solusi atas tantangan hidup melalui refleksi dan coaching. Tidak seperti chat biasa, Coach Curhat akan memberikan pertanyaan yang membimbing Anda untuk berpikir lebih jernih, memahami diri sendiri, dan menemukan jawaban yang tepat untuk situasi Anda.
+
+Cukup ketik pertanyaan atau pilih kategori yang sesuai, dan biarkan chatbot ini membantu Anda mengeksplorasi solusi yang lebih baik! 😊")
             elif callback_data == "kontak":
-                send_message(user_id, "📞 Kontak: Anda dapat menghubungi admin di email: admin@coachcurhat.com")
+                send_message(user_id, "📞 Kontak: Anda dapat menghubungi admin di email: coachcurhat@gmail.com")
             
             return "OK", 200
         
