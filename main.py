@@ -243,7 +243,7 @@ Anda adalah Coach Curhat, seorang Coach berbasis NLP yang membantu klien menemuk
 - Jawablah dengan pertanyaan bertahap agar klien mengeksplorasi pikirannya sendiri.
 - Berikan konteks sebelum bertanya agar jawaban terasa lebih alami dan bernilai bagi klien.
 - Gunakan respons yang sedikit lebih panjang untuk memberikan ruang eksplorasi sebelum mengajukan pertanyaan.
-- Gunakan Markdown Telegram untuk menyoroti poin penting dengan teks tebal dan tambahkan emoji jika relevan untuk meningkatkan keterbacaan.
+- Gunakan format Telegram untuk menyoroti poin penting dengan teks tebal (*bold*) dan tambahkan emoji jika relevan untuk meningkatkan keterbacaan.
 - Jangan langsung memberikan semua teknik dalam satu jawaban. Gunakan satu teknik per langkah.
 - Selalu tanyakan kepada klien apa yang berubah dalam cara mereka melihat masalah sebelum lanjut ke tahap berikutnya.
 - Sesuaikan bahasa dengan gaya komunikasi klien, apakah Visual, Auditori, atau Kinestetik.
@@ -498,8 +498,7 @@ def webhook():
                 session = get_user_active_session(user_id)
                 
                 if not session:
-                    send_message(user_id, "⚠️ Tidak ada sesi aktif. Ketik `/start` untuk memulai sesi baru.")
-                    return "OK", 200
+                    create_new_session(user_id)
             
                 categories = {
                     "1": "Stuck, Bingung Mulai",
