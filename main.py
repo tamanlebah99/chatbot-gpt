@@ -14,6 +14,18 @@ session = {}
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 OPENAI_API_KEY =  os.getenv("OPENAI_API_KEY")
 openai.api_key = OPENAI_API_KEY
+categories = {
+    "1": "Stuck, Bingung Mulai",
+    "2": "Kebanyakan Ide, No Action",
+    "3": "Takut Gagal",
+    "4": "Susah Konsisten",
+    "5": "Kurang Percaya Diri",
+    "6": "Usaha Belum Berhasil",
+    "7": "Overthinking Parah",
+    "8": "Mudah Terdistraksi",
+    "9": "Zona Nyaman vs Tantangan",
+    "10": "Tahu Harus Ngapain, Tapi..."
+}
 
 def get_db_connection():
     """Membuat koneksi ke database MySQL."""
@@ -131,6 +143,23 @@ def delete_all_sessions(user_id):
     conn.close()
 
 def create_new_session(user_id):
+    """Membuat sesi baru untuk user tanpa menampilkan menu kategori."""
+    deactivate_user_sessions(user_id)  # Nonaktifkan sesi lama sebelum membuat sesi baru
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Buat sesi baru
+    cursor.execute(
+        "INSERT INTO coaching_sessions (user_id, goal_coaching, chat_history, chat_summary, active) VALUES (%s, '', '', '', TRUE)",
+        (user_id,)
+    )
+    
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+def create_new_sessionX(user_id):
     """Membuat sesi coaching baru untuk user dan menonaktifkan sesi sebelumnya."""
     deactivate_user_sessions(user_id)  # Nonaktifkan sesi lama sebelum membuat sesi baru
 
@@ -150,21 +179,6 @@ def create_new_session(user_id):
     # Cek apakah user memiliki sesi lain selain yang baru dibuat
     session_list = get_user_sessions(user_id)
     has_sessions = len(session_list) > 1  # Karena sesi baru sudah dibuat, maka harus lebih dari 1
-
-    # Kategori coaching
-    categories = {
-        "1": "Stuck, Bingung Mulai",
-        "2": "Kebanyakan Ide, No Action",
-        "3": "Takut Gagal",
-        "4": "Susah Konsisten",
-        "5": "Kurang Percaya Diri",
-        "6": "Usaha Belum Berhasil",
-        "7": "Overthinking Parah",
-        "8": "Mudah Terdistraksi",
-        "9": "Zona Nyaman vs Tantangan",
-        "10": "Tahu Harus Ngapain, Tapi..."
-    }
-
     
     category_text = "\n".join([f"{key}. {value}" for key, value in categories.items()])
     
@@ -239,11 +253,10 @@ def generate_prompt(user_id, chat_last, session):
 Anda adalah Coach Curhat, seorang Coach berbasis NLP yang membantu klien menemukan solusi mereka sendiri melalui pertanyaan eksploratif. Coaching harus bertahap, interaktif, dan fokus pada eksplorasi diri klien.
 
 2. Pendekatan Coaching & Aturan Interaksi
-- Gunakan respons yang ramah, suportif, dan membangun kepercayaan.
+- Gunakan respons yang ramah, suportif, dan membangun kepercayaan. Jika perlu gunakan emoji.
 - Jawablah dengan pertanyaan bertahap agar klien mengeksplorasi pikirannya sendiri.
 - Berikan konteks sebelum bertanya agar jawaban terasa lebih alami dan bernilai bagi klien.
-- Gunakan respons yang sedikit lebih panjang untuk memberikan ruang eksplorasi sebelum mengajukan pertanyaan.
-- Gunakan format Telegram teks tebal (*bold*) dan tambahkan emoji jika relevan untuk meningkatkan keterbacaan.
+- Jika ada kata atau kalimat bold, gunakan format Telegram *bold*.
 - Jika ada lebih dari satu pertanyaan, susun dalam format daftar numerik atau bullet agar lebih mudah dipahami.
 - Jangan langsung memberikan semua teknik dalam satu jawaban. Gunakan satu teknik per langkah.
 - Selalu tanyakan kepada klien apa yang berubah dalam cara mereka melihat masalah sebelum lanjut ke tahap berikutnya.
@@ -262,33 +275,18 @@ Anda adalah Coach Curhat, seorang Coach berbasis NLP yang membantu klien menemuk
 Pola 1: Identifikasi Akar Emosi atau Keyakinan
 - Jika klien menyatakan ketakutan atau hambatan, bantu mereka mengklarifikasi apa yang sebenarnya mereka takuti atau hambatan apa yang mereka rasakan.
 - Berikan pengantar sebelum bertanya agar terasa lebih suportif dan membangun koneksi.
-- Contoh pola pertanyaan:
-  - "Wajar banget kalau ada rasa khawatir. Kalau kita coba lihat lebih dalam, apa yang sebenarnya paling membuatmu ragu?"
-  - "Kalau kita telaah lebih jauh, apakah tantangan utama yang kamu hadapi lebih ke faktor internal (seperti keyakinan diri) atau eksternal (seperti lingkungan dan peluang)?"
 
 Pola 2: Eksplorasi Makna atau Perspektif
 - Setelah klien mengenali akar perasaannya, bantu mereka menggali lebih dalam dengan menanyakan makna dari emosi atau keyakinan tersebut.
-- Contoh pola pertanyaan:
-  - "Kalau kita definisikan lebih jelas, apa arti ‘sukses’ menurutmu dalam situasi ini?"
-  - "Apa skenario terburuk yang bisa terjadi, dan bagaimana kamu bisa menghadapinya?"
 
 Pola 3: Reframing atau Teknik Lanjutan
 - Jika klien masih terjebak dalam pola pikir yang sama, gunakan reframing atau teknik lain untuk membantu mereka melihat situasi dari sudut pandang yang berbeda.
-- Contoh pola pertanyaan:
-  - "Bagaimana jika kita melihat ini dari perspektif lima tahun ke depan? Apakah kamu masih melihatnya sebagai hambatan yang besar?"
-  - "Kalau chatbot ini bisa membantu satu orang saja secara nyata, apakah itu sudah cukup berharga untukmu?"
 
 Pola 4: Membantu Klien Mengambil Tindakan
 - Setelah klien mulai memahami perspektif baru, bantu mereka menetapkan langkah nyata untuk bergerak maju.
-- Contoh pola pertanyaan:
-  - "Sekarang, kalau kita fokus ke eksekusi, apa satu langkah konkret yang bisa kamu lakukan minggu ini untuk menguji potensi pasar chatbot-mu?"
-  - "Kalau ada satu hal kecil yang bisa kamu lakukan sekarang untuk mempercepat progres, apa itu?"
 
 Pola 5: Evaluasi dan Integrasi Perubahan
 - Bantu klien mengevaluasi apakah perubahan mereka sudah efektif dan bagaimana mereka bisa mempertahankannya.
-- Contoh pola pertanyaan:
-  - "Apa yang berubah dalam cara kamu melihat masalah ini sekarang?"
-  - "Bagaimana kamu akan menjaga pola pikir ini dalam situasi serupa di masa depan?"
 
 4. Teknik NLP yang Harus Digunakan (Gunakan Sesuai Tahapannya)
 - Meta Model → Klarifikasi dan tantang pola bahasa klien.
@@ -321,6 +319,7 @@ def handle_new_session(user_id):
     """Menonaktifkan sesi lama dan membuat sesi baru."""
     deactivate_user_sessions(user_id)
     create_new_session(user_id)
+    send_welcome_message(user_id)
     return "OK", 200
 
 def handle_switch_session(user_id, session_id):
@@ -393,21 +392,6 @@ def send_welcome_message(user_id):
     session_list = get_user_sessions(user_id)
     has_sessions = len(session_list) > 0  # Jika ada sesi, user sudah memiliki sesi
 
-    # Kategori coaching
-    categories = {
-        "1": "Stuck, Bingung Mulai",
-        "2": "Kebanyakan Ide, No Action",
-        "3": "Takut Gagal",
-        "4": "Susah Konsisten",
-        "5": "Kurang Percaya Diri",
-        "6": "Usaha Belum Berhasil",
-        "7": "Overthinking Parah",
-        "8": "Mudah Terdistraksi",
-        "9": "Zona Nyaman vs Tantangan",
-        "10": "Tahu Harus Ngapain, Tapi..."
-    }
-
-    
     category_text = "\n".join([f"{key}. {value}" for key, value in categories.items()])
     
     # Pesan utama tanpa mengubah sesi aktif
@@ -468,8 +452,8 @@ def webhook():
             
                     send_message_with_keyboard(user_id, reply, keyboard)
                 else:
-                    create_new_session(user_id)                    
-            
+                    create_new_session(user_id)    
+                    send_welcome_message(user_id)
                 return "OK", 200
             
             elif incoming_msg.lower() == "/new_session":
@@ -499,22 +483,8 @@ def webhook():
                 session = get_user_active_session(user_id)
                 
                 if not session:
-                    create_new_session(user_id)
-            
-                categories = {
-                    "1": "Stuck, Bingung Mulai",
-                    "2": "Kebanyakan Ide, No Action",
-                    "3": "Takut Gagal",
-                    "4": "Susah Konsisten",
-                    "5": "Kurang Percaya Diri",
-                    "6": "Usaha Belum Berhasil",
-                    "7": "Overthinking Parah",
-                    "8": "Mudah Terdistraksi",
-                    "9": "Zona Nyaman vs Tantangan",
-                    "10": "Tahu Harus Ngapain, Tapi..."
-                }
-
-            
+                    create_new_session(user_id)  
+                    
                 # **Cek apakah user mengetik angka sebagai kategori**
                 if not session.get("category_selected", False) and incoming_msg in categories:
                     first_msg = categories[incoming_msg]  # Ubah angka ke teks kategori
