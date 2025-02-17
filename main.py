@@ -31,7 +31,7 @@ def send_message(chat_id, text):
     payload = {
         "chat_id": chat_id, 
         "text": text,
-        "parse_mode": "MarkdownV2"
+        "parse_mode": "Markdown"
     }
     requests.post(url, json=payload)
 
@@ -41,7 +41,7 @@ def send_message_with_keyboard(chat_id, text, keyboard):
     payload = {
         "chat_id": chat_id,
         "text": text,
-        "parse_mode": "MarkdownV2",
+        "parse_mode": "Markdown",
         "reply_markup": json.dumps(keyboard)
     }
     requests.post(url, json=payload)
