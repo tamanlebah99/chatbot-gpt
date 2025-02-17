@@ -28,7 +28,11 @@ def get_db_connection():
 # Fungsi mengirim pesan biasa
 def send_message(chat_id, text):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": chat_id, "text": text}
+    payload = {
+        "chat_id": chat_id, 
+        "text": text,
+        "parse_mode": "MarkdownV2"
+    }
     requests.post(url, json=payload)
 
 # Fungsi mengirim pesan dengan keyboard interaktif
@@ -37,7 +41,7 @@ def send_message_with_keyboard(chat_id, text, keyboard):
     payload = {
         "chat_id": chat_id,
         "text": text,
-        "parse_mode": "Markdown",
+        "parse_mode": "MarkdownV2",
         "reply_markup": json.dumps(keyboard)
     }
     requests.post(url, json=payload)
