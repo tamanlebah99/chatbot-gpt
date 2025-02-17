@@ -31,7 +31,7 @@ def send_message(chat_id, text):
     payload = {
         "chat_id": chat_id, 
         "text": text,
-        "parse_mode": "Markdown"
+        "parse_mode": "MarkdownV2"
     }
     requests.post(url, json=payload)
 
