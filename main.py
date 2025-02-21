@@ -26,6 +26,9 @@ categories = {
     "9": "Zona Nyaman vs Tantangan",
     "10": "Tahu Harus Ngapain, Tapi..."
 }
+first_name = ""
+last_name = ""
+username = ""
 
 def get_db_connection():
     """Membuat koneksi ke database MySQL."""
@@ -151,6 +154,23 @@ def create_new_session(user_id):
 
     # Buat sesi baru
     cursor.execute(
+        "INSERT INTO coaching_sessions (user_id, firstname, lastname, username, goal_coaching, chat_history, chat_summary, active) VALUES (%s, %s, %s, %s, '', '', '', TRUE)",
+        (user_id,first_name, last_name, username)
+    )
+    
+    conn.commit()
+    cursor.close()
+    conn.close()
+    
+def create_new_sessionY(user_id):
+    """Membuat sesi baru untuk user tanpa menampilkan menu kategori."""
+    deactivate_user_sessions(user_id)  # Nonaktifkan sesi lama sebelum membuat sesi baru
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Buat sesi baru
+    cursor.execute(
         "INSERT INTO coaching_sessions (user_id, goal_coaching, chat_history, chat_summary, active) VALUES (%s, '', '', '', TRUE)",
         (user_id,)
     )
@@ -158,7 +178,7 @@ def create_new_session(user_id):
     conn.commit()
     cursor.close()
     conn.close()
-
+    
 def create_new_sessionX(user_id):
     """Membuat sesi coaching baru untuk user dan menonaktifkan sesi sebelumnya."""
     deactivate_user_sessions(user_id)  # Nonaktifkan sesi lama sebelum membuat sesi baru
@@ -225,9 +245,12 @@ def update_coaching_session(user_id, session, chat_last, coaching_output, catego
         UPDATE coaching_sessions
         SET chat_history = %s, 
             chat_summary = %s, 
-            category_selected = %s
+            category_selected = %s, 
+            firstname = %s, 
+            lastname = %s, 
+            username = %s
         WHERE user_id = %s AND session_id = %s
-    """, (new_chat_history, chat_summary, int(category_selected), user_id, session_id))
+    """, (new_chat_history, chat_summary, int(category_selected), first_name, last_name, username, user_id, session_id))
     
     conn.commit()
     cursor.close()
@@ -434,7 +457,10 @@ def webhook():
         if "message" in update:
             user_id = update["message"]["chat"]["id"]
             incoming_msg = update["message"]["text"].strip()
-            
+            first_name = update["message"]["chat"]["first_name"]
+            last_name = update["message"]["chat"]["last_name"]
+            username = update["message"]["chat"]["username"]
+
             if incoming_msg.lower() == "/start":
                 session_list = get_user_sessions(user_id)
             
