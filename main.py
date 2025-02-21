@@ -228,7 +228,7 @@ def create_new_sessionX(user_id):
     # Kirim pesan selamat datang dengan tombol interaktif
     send_message_with_keyboard(user_id, welcome_message, keyboard)
 
-def update_coaching_session(user_id, session, chat_last, coaching_output, category_selected=False):
+def update_coaching_session(user_id, first_name, last_name, username, session, chat_last, coaching_output, category_selected=False):
     """Update chat history, summary, and category selection in the database."""
     existing_chat_history = json.loads(session.get('chat_history', '[]'))  # Pastikan JSON valid
     existing_chat_history.append({"role": "user", "content": chat_last})
@@ -521,14 +521,14 @@ def webhook():
                     first_msg = categories[incoming_msg]  # Ubah angka ke teks kategori
                     prompt = generate_prompt(user_id, first_msg, session)
                     coaching_output = send_to_openai(prompt)
-                    update_coaching_session(user_id, session, first_msg, coaching_output, category_selected=True)  # Set kategori terpilih
+                    update_coaching_session(user_id, first_name, last_name, username, session, first_msg, coaching_output, category_selected=True)  # Set kategori terpilih
                     send_message(user_id, coaching_output)
                     return "OK", 200
             
                 # Jika bukan kategori, kirim sebagai input biasa ke OpenAI
                 prompt = generate_prompt(user_id, incoming_msg, session)
                 coaching_output = send_to_openai(prompt)
-                update_coaching_session(user_id, session, incoming_msg, coaching_output)
+                update_coaching_session(user_id, first_name, last_name, username, session, incoming_msg, coaching_output)
                 send_message(user_id, coaching_output)
                 return "OK", 200
 
