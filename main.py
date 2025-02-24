@@ -145,7 +145,7 @@ def delete_all_sessions(user_id):
     cursor.close()
     conn.close()
 
-def create_new_session(user_id):
+def create_new_session(user_id, first_name, last_name, username):
     """Membuat sesi baru untuk user tanpa menampilkan menu kategori."""
     deactivate_user_sessions(user_id)  # Nonaktifkan sesi lama sebelum membuat sesi baru
 
@@ -343,10 +343,10 @@ Format Chat Coaching dalam MyGPTs
     prompt = [{"role": "system", "content": instructions}] + chat_history + [{"role": "user", "content": str(chat_last)}]
     return prompt
 
-def handle_new_session(user_id):
+def handle_new_session(user_id, first_name, last_name, username):
     """Menonaktifkan sesi lama dan membuat sesi baru."""
     deactivate_user_sessions(user_id)
-    create_new_session(user_id)
+    create_new_session(user_id, first_name, last_name, username)
     send_welcome_message(user_id)
     return "OK", 200
 
@@ -483,12 +483,12 @@ def webhook():
             
                     send_message_with_keyboard(user_id, reply, keyboard)
                 else:
-                    create_new_session(user_id)    
+                    create_new_session(user_id, first_name, last_name, username)    
                     send_welcome_message(user_id)
                 return "OK", 200
             
             elif incoming_msg.lower() == "/new_session":
-                return handle_new_session(user_id)
+                return handle_new_session(user_id, first_name, last_name, username)
             
             elif incoming_msg.lower().startswith("/switch_session"):
                 try:
@@ -514,7 +514,7 @@ def webhook():
                 session = get_user_active_session(user_id)
                 
                 if not session:
-                    create_new_session(user_id)  
+                    create_new_session(user_id, first_name, last_name, username)  
                     
                 # **Cek apakah user mengetik angka sebagai kategori**
                 if not session.get("category_selected", False) and incoming_msg in categories:
@@ -549,7 +549,7 @@ def webhook():
                 return handle_switch_session(user_id, session_id)
         
             elif callback_data == "new_session":
-                return handle_new_session(user_id)
+                return handle_new_session(user_id, first_name, last_name, username)
         
             elif callback_data == "delete_session":
                 return handle_delete_session(user_id)  # Akan menampilkan list sesi untuk dihapus
