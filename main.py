@@ -457,9 +457,9 @@ def webhook():
         if "message" in update:
             user_id = update["message"]["chat"]["id"]
             incoming_msg = update["message"]["text"].strip()
-            first_name = update["message"]["chat"]["first_name"]
-            last_name = update["message"]["chat"]["last_name"]
-            username = update["message"]["chat"]["username"]
+            first_name = update["message"]["chat"].get("first_name", "")
+            last_name = update["message"]["chat"].get("last_name", "")
+            username = update["message"]["chat"].get("username", "")
 
             if incoming_msg.lower() == "/start":
                 session_list = get_user_sessions(user_id)
